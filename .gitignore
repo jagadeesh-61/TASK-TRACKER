@@ -1,0 +1,35 @@
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+vendor/
+node_modules/
+backend/vendor/
+frontend/node_modules/
+
+# Logs & cache
+*.log
+.phpunit.result.cache
+.phpunit.cache/
+
+# Local database
+backend/database/database.sqlite
+*.sqlite
+
+# Cache
+backend/bootstrap/cache/*
+!backend/bootstrap/cache/.gitignore
+
+# Temporary files & IDEs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Frontend build
+frontend/dist/
+
+# Assignment brief (third-party document, not part of the source)
+RTIH_PHP_MySQL_Technical_Assignment.pdf

@@ -1,0 +1,400 @@
+{
+  "info": {
+    "name": "Task Tracker API",
+    "description": "RTIH Task Tracker – Laravel API.\n\nUsage:\n1. Start the API (php artisan serve) and seed the database.\n2. Run 'Auth > Login as Alice' first. Postman keeps the session cookie.\n3. The collection pre-request script fetches /sanctum/csrf-cookie and sends the token as X-XSRF-TOKEN on every request.\n4. Set the bob_task_id variable to the id of one of Bob's tasks (log in as Bob and run 'List my tasks') for the authorization tests.\n\nThe Origin header marks requests as coming from the SPA, so Sanctum uses session-cookie auth.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "spa_origin", "value": "http://localhost:5173" },
+    { "key": "xsrf_token", "value": "" },
+    { "key": "task_id", "value": "" },
+    { "key": "bob_task_id", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Fetch a fresh CSRF cookie and copy its value into {{xsrf_token}}.",
+          "if (pm.request.headers.has('X-Skip-Csrf')) { return; }",
+          "pm.sendRequest({",
+          "  url: pm.collectionVariables.get('base_url') + '/sanctum/csrf-cookie',",
+          "  method: 'GET',",
+          "  header: { Origin: pm.collectionVariables.get('spa_origin'), Accept: 'application/json' }",
+          "}, function (err, res) {",
+          "  if (err) { console.log(err); return; }",
+          "  const header = res.headers.all().find(h => h.key.toLowerCase() === 'set-cookie' && h.value.startsWith('XSRF-TOKEN='));",
+          "  if (header) {",
+          "    const value = header.value.split(';')[0].substring('XSRF-TOKEN='.length);",
+          "    pm.collectionVariables.set('xsrf_token', decodeURIComponent(value));",
+          "  }",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{base_url}}/api/health"
+          }
+        },
+        {
+          "name": "Register new user",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman User\",\n  \"email\": \"postman@example.com\",\n  \"password\": \"Secret123\",\n  \"password_confirmation\": \"Secret123\",\n  \"role\": \"admin\"\n}" },
+            "url": "{{base_url}}/api/register",
+            "description": "Expect 201 and data.role = \"user\". The \"role\": \"admin\" in the body must be ignored."
+          }
+        },
+        {
+          "name": "Login as Alice",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"User@1234\"\n}" },
+            "url": "{{base_url}}/api/login"
+          }
+        },
+        {
+          "name": "Login as Bob",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"bob@example.com\",\n  \"password\": \"User@1234\"\n}" },
+            "url": "{{base_url}}/api/login"
+          }
+        },
+        {
+          "name": "Login as Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin@123\"\n}" },
+            "url": "{{base_url}}/api/login"
+          }
+        },
+        {
+          "name": "Login with wrong password (expect 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"wrong-password1\"\n}" },
+            "url": "{{base_url}}/api/login",
+            "description": "Expect 422 \"Invalid email or password.\" After 5 attempts in a minute, expect 429."
+          }
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" }
+            ],
+            "url": "{{base_url}}/api/user"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "url": "{{base_url}}/api/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List my tasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks?search=report&status=&page=1&per_page=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"],
+              "query": [
+                { "key": "search", "value": "report" },
+                { "key": "status", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" }
+            ],
+            "url": "{{base_url}}/api/tasks/summary"
+          }
+        },
+        {
+          "name": "Create task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('task_id', pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Created from Postman\",\n  \"description\": \"Testing the API\",\n  \"priority\": \"High\"\n}" },
+            "url": "{{base_url}}/api/tasks"
+          }
+        },
+        {
+          "name": "Create task with empty title (expect 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"   \"\n}" },
+            "url": "{{base_url}}/api/tasks"
+          }
+        },
+        {
+          "name": "Show task",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" }
+            ],
+            "url": "{{base_url}}/api/tasks/{{task_id}}"
+          }
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Updated from Postman\",\n  \"description\": \"Edited\"\n}" },
+            "url": "{{base_url}}/api/tasks/{{task_id}}"
+          }
+        },
+        {
+          "name": "Change status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"In Progress\"\n}" },
+            "url": "{{base_url}}/api/tasks/{{task_id}}/status"
+          }
+        },
+        {
+          "name": "Change status to invalid value (expect 422)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Done\"\n}" },
+            "url": "{{base_url}}/api/tasks/{{task_id}}/status"
+          }
+        },
+        {
+          "name": "Delete task",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "url": "{{base_url}}/api/tasks/{{task_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Security checks",
+      "item": [
+        {
+          "name": "Alice views Bob's task (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" }
+            ],
+            "url": "{{base_url}}/api/tasks/{{bob_task_id}}",
+            "description": "Log in as Alice first."
+          }
+        },
+        {
+          "name": "Alice updates Bob's task (expect 404)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Hacked\"\n}" },
+            "url": "{{base_url}}/api/tasks/{{bob_task_id}}"
+          }
+        },
+        {
+          "name": "Alice deletes Bob's task (expect 404)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "url": "{{base_url}}/api/tasks/{{bob_task_id}}"
+          }
+        },
+        {
+          "name": "User requests all tasks (expect 403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" }
+            ],
+            "url": "{{base_url}}/api/tasks?scope=all",
+            "description": "Logged in as Alice: 403. Logged in as Admin: 200 with an owner on each task."
+          }
+        },
+        {
+          "name": "Admin updates Bob's task (expect 403)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-XSRF-TOKEN", "value": "{{xsrf_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Changed by admin\"\n}" },
+            "url": "{{base_url}}/api/tasks/{{bob_task_id}}",
+            "description": "Log in as Admin first."
+          }
+        },
+        {
+          "name": "Create task without CSRF token (expect 419)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" },
+              { "key": "X-Skip-Csrf", "value": "1" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"No CSRF\"\n}" },
+            "url": "{{base_url}}/api/tasks",
+            "description": "No X-XSRF-TOKEN header. Laravel must reject it with 419 CSRF token mismatch."
+          }
+        },
+        {
+          "name": "Search with SQL injection (expect empty list)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Origin", "value": "{{spa_origin}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks?search=' OR 1=1 --",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"],
+              "query": [{ "key": "search", "value": "' OR 1=1 --" }]
+            }
+          }
+        },
+        {
+          "name": "List tasks while logged out (expect 401)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{base_url}}/api/tasks",
+            "description": "Run 'Logout' first. Without a session the API returns 401 Unauthenticated."
+          }
+        }
+      ]
+    }
+  ]
+}
